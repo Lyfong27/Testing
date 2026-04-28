@@ -1,1 +1,146 @@
-gfhjghkj
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BabyShop Pro POS - Linux Dev</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen font-sans">
+
+    <nav class="flex justify-between items-center p-6 bg-slate-800/80 sticky top-0 z-50 border-b border-slate-700">
+        <div class="text-2xl font-black tracking-tighter text-blue-500">BABYSHOP_PRO</div>
+        <div class="text-sm text-slate-400">Linux Environment | Year 3 IT</div>
+    </nav>
+
+    <main class="flex flex-col items-center py-10 px-4">
+        
+        <div class="glass p-8 rounded-3xl w-full max-w-md shadow-2xl mb-8">
+            <h2 class="text-2xl font-bold mb-6 text-blue-400">Discount Calculator</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Item Price ($)</label>
+                    <input type="number" id="price" placeholder="0.00" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 focus:border-blue-500 outline-none transition text-xl font-mono text-emerald-400">
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Discount %</label>
+                    <input type="number" id="discount" placeholder="10" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 focus:border-blue-500 outline-none transition text-xl font-mono text-blue-400">
+                </div>
+
+                <button onclick="calculatePrice()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-900/20 transition-all active:scale-95">
+                    Process Transaction
+                </button>
+
+                <div class="mt-6 pt-6 border-t border-slate-700 text-center">
+                    <p class="text-slate-400 text-sm uppercase tracking-widest">Final Total</p>
+                    <p id="total" class="text-5xl font-black text-white mt-2">$0.00</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass p-6 rounded-3xl w-full max-w-md shadow-xl border border-white/5">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-200 uppercase tracking-tight">Sales History</h3>
+                <span id="sales-count" class="bg-slate-700 px-3 py-1 rounded-full text-xs font-bold text-blue-400">0 Items</span>
+            </div>
+            
+            <div id="history-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, deleteDoc } 
+          from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // IMPORTANT: Replace with your actual Firebase config from the console
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const salesCol = collection(db, 'sales');
+
+        // Delete Logic
+        window.deleteSale = async function(id) {
+            if(confirm("Permanently delete this record?")) {
+                try {
+                    await deleteDoc(doc(db, "sales", id));
+                } catch (e) { console.error(e); }
+            }
+        };
+
+        // Calculation & Save Logic
+        window.calculatePrice = async function() {
+            const priceVal = document.getElementById('price').value;
+            const discVal = document.getElementById('discount').value || 0;
+            
+            if (!priceVal || priceVal <= 0) return alert("Enter price");
+
+            const final = (priceVal - (priceVal * (discVal / 100))).toFixed(2);
+            document.getElementById('total').innerText = '$' + final;
+
+            try {
+                await addDoc(salesCol, {
+                    price: priceVal,
+                    discount: discVal,
+                    total: final,
+                    timestamp: serverTimestamp()
+                });
+                document.getElementById('price').value = '';
+            } catch (e) { console.error(e); }
+        };
+
+        // Real-time Update Logic
+        const q = query(salesCol, orderBy('timestamp', 'desc'));
+        onSnapshot(q, (snapshot) => {
+            const list = document.getElementById('history-list');
+            document.getElementById('sales-count').innerText = `${snapshot.size} Items`;
+            list.innerHTML = '';
+            
+            if (snapshot.empty) {
+                list.innerHTML = '<p class="text-slate-600 italic text-center py-4">No data found...</p>';
+                return;
+            }
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const item = document.createElement('div');
+                item.className = "bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 flex justify-between items-center animate-fade-in";
+                item.innerHTML = `
+                    <div>
+                        <p class="text-[10px] text-slate-500 font-mono">$${data.price} - ${data.discount}%</p>
+                        <p class="text-lg font-bold text-emerald-400">$${data.total}</p>
+                    </div>
+                    <button onclick="deleteSale('${doc.id}')" class="p-2 text-slate-600 hover:text-red-500 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                    </button>
+                `;
+                list.appendChild(item);
+            });
+        });
+    </script>
+</body>
+</html>
